@@ -28,13 +28,13 @@ async def gemini_handler(req: GeminiRequest):
     session_id = req.session_id
     mode = req.mode or "default"
 
-    # Initialize session memory
+# init sess mem
     if session_id not in session_histories:
         session_histories[session_id] = []
 
     history = session_histories[session_id]
 
-    # Compose message depending on the mode
+
     if req.parent_context and req.sub_question:
         user_message = f"""Based on the following question context:\n\n{req.parent_context}\n\nNow answer this part:\n{req.sub_question}"""
     elif req.message:
