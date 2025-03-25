@@ -81,3 +81,4 @@ async def gemini_handler(req: GeminiRequest):
 async def reset_session(req: GeminiRequest):
     session_histories.pop(req.session_id, None)
     return {"success": True}
+
