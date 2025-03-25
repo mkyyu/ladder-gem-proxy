@@ -62,6 +62,7 @@ async def gemini_handler(req: GeminiRequest):
             }
 
         reply = gemini_response.json()["candidates"][0]["content"]["parts"][0]["text"]
+        reply = reply.replace("\\n", "\n")
 
         # Append model reply to memory
         history.append({
