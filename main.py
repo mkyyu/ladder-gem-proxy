@@ -4,6 +4,8 @@ import httpx
 import os
 from dotenv import load_dotenv
 from memory_store import get_memory, append_user, append_ai
+from mark_answer import router as mark_router
+app.include_router(mark_router)
 
 load_dotenv()
 
