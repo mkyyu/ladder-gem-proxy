@@ -1,79 +1,54 @@
-from fastapi import FastAPI, Request, Depends, Header, HTTPException
-from pydantic import BaseModel
-from typing import Optional
+from fastapi import FastAPI, Request, HTTPException, Depends, Header
+from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import os
 from dotenv import load_dotenv
-from mark_answer import router as mark_router
+from memory_store import get_memory, append_user, append_ai
 
 load_dotenv()
 
-app = FastAPI()
-app.include_router(mark_router)
-
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 API_SECRET = os.getenv("API_SECRET")
-session_histories = {}
+
+app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def verify_api_key(x_api_key: str = Header(...)):
     if x_api_key != API_SECRET:
         raise HTTPException(status_code=403, detail="Invalid API Key")
 
-class GeminiRequest(BaseModel):
-    session_id: str
-    message: Optional[str] = None
-    parent_context: Optional[str] = None
-    sub_question: Optional[str] = None
-    mode: Optional[str] = "default"
-
 @app.post("/gemini", dependencies=[Depends(verify_api_key)])
-async def gemini_handler(req: GeminiRequest):
-    session_id = req.session_id
-    if session_id not in session_histories:
-        session_histories[session_id] = []
+async def gemini_handler(request: Request):
+    data = await request.json()
+    session_id = data.get("session_id")
+    message = data.get("message")
 
-    history = session_histories[session_id]
+    if not session_id or not message:
+        raise HTTPException(status_code=400, detail="Missing session_id or message")
 
-    if req.parent_context and req.sub_question:
-        message = f"Context:\n{req.parent_context}\n\nNow answer this part:\n{req.sub_question}"
-    elif req.message:
-        message = req.message
-    else:
-        return {"error": "Missing message or sub-question."}
+    append_user(session_id, message)
+    full_history = get_memory(session_id)
 
-    history.append({
-        "role": "user",
-        "parts": [{"text": message}]
-    })
+    payload = { "contents": full_history }
 
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            gemini_response = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}",
-                json={"contents": history}
-            )
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, json=payload)
 
-        if gemini_response.status_code != 200:
-            return {
-                "error": "Gemini API failed",
-                "status_code": gemini_response.status_code,
-                "details": gemini_response.text
-            }
+    if response.status_code != 200:
+        raise HTTPException(status_code=500, detail=response.text)
 
-        reply = gemini_response.json()["candidates"][0]["content"]["parts"][0]["text"]
-        reply = reply.replace("\\n", "\n").strip()
+    reply = response.json()["candidates"][0]["content"]["parts"][0]["text"]
 
-        history.append({
-            "role": "model",
-            "parts": [{"text": reply}]
-        })
+    cleaned = reply.strip("`").replace("```json", "").replace("```", "").strip()
+    if cleaned.lower().startswith("json"):
+        cleaned = cleaned[4:].strip()
 
-        return {"reply": reply}
+    append_ai(session_id, cleaned)
 
-    except Exception as e:
-        return {"error": "Internal server error", "details": str(e)}
-
-@app.post("/reset", dependencies=[Depends(verify_api_key)])
-async def reset_session(req: GeminiRequest):
-    session_histories.pop(req.session_id, None)
-    return {"success": True}
+    return {"reply": cleaned}

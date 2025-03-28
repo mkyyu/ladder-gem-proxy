@@ -4,6 +4,7 @@ from typing import Optional
 import httpx
 import os
 from dotenv import load_dotenv
+from memory_store import get_memory, append_user, append_ai
 
 load_dotenv()
 
@@ -47,13 +48,35 @@ Respond in JSON format like:
 }}
 """.strip()
 
+    append_user(req.session_id, prompt)
+
     try:
         if req.model.lower() == "gemini":
-            return await call_gemini(prompt, req.session_id)
+            return await call_gemini(req.session_id)
         else:
             return await call_openai(prompt)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+async def call_gemini(session_id: str):
+    full_history = get_memory(session_id)
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+    payload = { "contents": full_history }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(url, json=payload)
+
+    if response.status_code != 200:
+        raise Exception(response.text)
+
+    content = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+    cleaned = content.strip("`").replace("```json", "").replace("```", "").strip()
+    if cleaned.lower().startswith("json"):
+        cleaned = cleaned[4:].strip()
+
+    append_ai(session_id, cleaned)
+    return safe_json(cleaned)
 
 async def call_openai(prompt: str):
     headers = {
@@ -73,33 +96,8 @@ async def call_openai(prompt: str):
         response = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=json_data)
         if response.status_code != 200:
             raise Exception(response.text)
+
         content = response.json()["choices"][0]["message"]["content"]
-        return safe_json(content)
-
-async def call_gemini(prompt: str, session_id: str):
-    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-    payload = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [{"text": prompt}]
-            }
-        ]
-    }
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(endpoint, json=payload)
-        if response.status_code != 200:
-            raise Exception(response.text)
-
-        content = response.json()["candidates"][0]["content"]["parts"][0]["text"]
-
-        # 🔧 Clean up possible Markdown/formatting junk
-        content = content.strip("`")
-        content = content.replace("```json", "").replace("```", "").strip()
-        if content.lower().startswith("json"):
-            content = content[4:].strip()
-
         return safe_json(content)
 
 def safe_json(text):
