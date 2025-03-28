@@ -6,13 +6,13 @@ from dotenv import load_dotenv
 from memory_store import get_memory, append_user, append_ai
 from mark_answer import router as mark_router
 
-
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 API_SECRET = os.getenv("API_SECRET")
 
 app = FastAPI()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,16 +31,25 @@ async def gemini_handler(request: Request):
     data = await request.json()
     session_id = data.get("session_id")
     message = data.get("message")
+    parent_context = data.get("parent_context")
+    sub_question = data.get("sub_question")
 
     if not session_id or not message:
         raise HTTPException(status_code=400, detail="Missing session_id or message")
 
+    # Inject optional context into the message
+    if parent_context:
+        message += f"\n\n(For context: the previous question was \"{parent_context}\")"
+    if sub_question:
+        message += f"\n\n(This is part of sub-question {sub_question}.)"
+
     append_user(session_id, message)
     full_history = get_memory(session_id)
 
-    payload = { "contents": full_history }
+    payload = {"contents": full_history}
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+
     async with httpx.AsyncClient() as client:
         response = await client.post(url, json=payload)
 
@@ -49,6 +58,7 @@ async def gemini_handler(request: Request):
 
     reply = response.json()["candidates"][0]["content"]["parts"][0]["text"]
 
+    # Cleanup response
     cleaned = reply.strip("`").replace("```json", "").replace("```", "").strip()
     if cleaned.lower().startswith("json"):
         cleaned = cleaned[4:].strip()
