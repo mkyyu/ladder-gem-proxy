@@ -61,8 +61,8 @@ async def gemini_handler(req: GeminiRequest):
             }
 
         reply = gemini_response.json()["candidates"][0]["content"]["parts"][0]["text"]
-        reply = reply.replace("\n", "
-").strip()
+        reply = reply.replace("\\n", "\n").strip()
+
         history.append({
             "role": "model",
             "parts": [{"text": reply}]
