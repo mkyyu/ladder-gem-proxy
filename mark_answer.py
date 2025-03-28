@@ -30,7 +30,7 @@ class MarkRequest(BaseModel):
 @router.post("/mark-answer", dependencies=[Depends(verify_api_key)])
 async def mark_answer(req: MarkRequest):
     prompt = f"""
-You are a strict exam marker. Given the following:
+You are a strict exam marker (IGCSE/IB). Given the following:
 
 - Question: {req.question_content}
 - Markscheme: {req.markscheme}
@@ -107,5 +107,5 @@ def safe_json(text):
     except json.JSONDecodeError:
         return {
             "final_marks": 0,
-            "feedback": f"AI returned an unstructured response: {text}"
+            "feedback": f"MarkAPIError, AI returned an unstructured response: {text}"
         }
