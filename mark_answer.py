@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel
 from typing import Optional
 import httpx
@@ -8,9 +8,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 router = APIRouter()
-
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+API_SECRET = os.getenv("API_SECRET")
+
+def verify_api_key(x_api_key: str = Header(...)):
+    if x_api_key != API_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid API Key")
 
 class MarkRequest(BaseModel):
     session_id: str
@@ -21,7 +25,7 @@ class MarkRequest(BaseModel):
     student_answer: str
     model: Optional[str] = "openai"
 
-@router.post("/mark-answer")
+@router.post("/mark-answer", dependencies=[Depends(verify_api_key)])
 async def mark_answer(req: MarkRequest):
     prompt = f"""
 You are a strict exam marker. Given the following:

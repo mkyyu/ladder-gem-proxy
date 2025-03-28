@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends, Header, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 import httpx
@@ -12,7 +12,12 @@ app = FastAPI()
 app.include_router(mark_router)
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+API_SECRET = os.getenv("API_SECRET")
 session_histories = {}
+
+def verify_api_key(x_api_key: str = Header(...)):
+    if x_api_key != API_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid API Key")
 
 class GeminiRequest(BaseModel):
     session_id: str
@@ -21,7 +26,7 @@ class GeminiRequest(BaseModel):
     sub_question: Optional[str] = None
     mode: Optional[str] = "default"
 
-@app.post("/gemini")
+@app.post("/gemini", dependencies=[Depends(verify_api_key)])
 async def gemini_handler(req: GeminiRequest):
     session_id = req.session_id
     if session_id not in session_histories:
@@ -68,7 +73,7 @@ async def gemini_handler(req: GeminiRequest):
     except Exception as e:
         return {"error": "Internal server error", "details": str(e)}
 
-@app.post("/reset")
+@app.post("/reset", dependencies=[Depends(verify_api_key)])
 async def reset_session(req: GeminiRequest):
     session_histories.pop(req.session_id, None)
     return {"success": True}
