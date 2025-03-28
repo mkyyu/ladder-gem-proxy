@@ -9,6 +9,7 @@ load_dotenv()
 
 router = APIRouter()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 API_SECRET = os.getenv("API_SECRET")
 
@@ -60,7 +61,7 @@ async def call_openai(prompt: str):
         "Content-Type": "application/json"
     }
     json_data = {
-        "model": "gpt-4o",
+        "model": OPENAI_MODEL,
         "messages": [
             { "role": "system", "content": "You are a strict exam marker." },
             { "role": "user", "content": prompt }
