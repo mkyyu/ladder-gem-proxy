@@ -92,6 +92,8 @@ async def call_gemini(prompt: str, session_id: str):
         if response.status_code != 200:
             raise Exception(response.text)
         content = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+        # 🔧 Remove code block formatting
+        content = content.strip("`").replace("```json", "").replace("```", "").strip()
         return safe_json(content)
 
 def safe_json(text):
