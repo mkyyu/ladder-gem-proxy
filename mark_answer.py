@@ -60,7 +60,7 @@ async def call_openai(prompt: str):
         "Content-Type": "application/json"
     }
     json_data = {
-        "model": "gpt-4",
+        "model": "gpt-4o",
         "messages": [
             { "role": "system", "content": "You are a strict exam marker." },
             { "role": "user", "content": prompt }
