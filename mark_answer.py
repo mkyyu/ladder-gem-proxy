@@ -91,9 +91,15 @@ async def call_gemini(prompt: str, session_id: str):
         response = await client.post(endpoint, json=payload)
         if response.status_code != 200:
             raise Exception(response.text)
+
         content = response.json()["candidates"][0]["content"]["parts"][0]["text"]
-        # 🔧 Remove code block formatting
-        content = content.strip("`").replace("```json", "").replace("```", "").strip()
+
+        # 🔧 Clean up possible Markdown/formatting junk
+        content = content.strip("`")
+        content = content.replace("```json", "").replace("```", "").strip()
+        if content.lower().startswith("json"):
+            content = content[4:].strip()
+
         return safe_json(content)
 
 def safe_json(text):
